@@ -1,0 +1,272 @@
+[
+    {
+        "alpha_id": "L57a0d2",
+        "transformed_exp": "target_data = winsorize(ts_zscore((0.7 * ts_backfill(implied_volatility_put_90, 63) + 0.3 * ts_backfill(implied_volatility_put_180, 63)) * (0.5 * ts_backfill(ts_mean(returns, 63), 63)), 63), std=2.5);\n        alpha_2088_basic = ts_regression(target_data, group_mean(target_data, log(ts_mean(cap, 21)), densify(bucket(rank(cap), range='0.1, 1, 0.1'))), 756, rettype=2);\n        alpha = rank(alpha_2088_basic);\n        alpha",
+        "original_sharpe": 1.35,
+        "original_fitness": 0.9,
+        "params": {
+            "data_types": [
+                "implied_volatility_put"
+            ],
+            "vol_terms": [
+                "90",
+                "180"
+            ],
+            "return_type": "ts_mean(returns, 63)",
+            "type_weights": [
+                1.0
+            ],
+            "term_weights": [
+                0.7,
+                0.3
+            ],
+            "return_weight": 0.5,
+            "backfill_days": 63,
+            "winsorize_std": 2.5
+        },
+        "exp_hash": "77ddde70bbc58ebf26cde70d80ef442e"
+    },
+    {
+        "alpha_id": "L57a0d2",
+        "transformed_exp": "target_data = winsorize(ts_zscore((0.7 * ts_backfill(implied_volatility_put_90, 63) + 0.3 * ts_backfill(implied_volatility_put_180, 63)) * (0.5 * ts_backfill(ts_mean(returns, 63), 63)), 63), std=4.0);\n        alpha_2088_basic = ts_regression(target_data, group_mean(target_data, log(ts_mean(cap, 21)), densify(bucket(rank(cap), range='0.1, 1, 0.1'))), 756, rettype=2);\n        alpha = rank(alpha_2088_basic);\n        alpha",
+        "original_sharpe": 1.35,
+        "original_fitness": 0.9,
+        "params": {
+            "data_types": [
+                "implied_volatility_put"
+            ],
+            "vol_terms": [
+                "90",
+                "180"
+            ],
+            "return_type": "ts_mean(returns, 63)",
+            "type_weights": [
+                1.0
+            ],
+            "term_weights": [
+                0.7,
+                0.3
+            ],
+            "return_weight": 0.5,
+            "backfill_days": 63,
+            "winsorize_std": 4.0
+        },
+        "exp_hash": "6d22233dd88d87c59685aa102f19910e"
+    },
+    {
+        "alpha_id": "L57a0d2",
+        "transformed_exp": "target_data = winsorize(ts_zscore((0.7 * ts_backfill(implied_volatility_put_90, 63) + 0.3 * ts_backfill(implied_volatility_put_180, 63)) * (0.8 * ts_backfill(ts_mean(returns, 63), 63)), 63), std=2.5);\n        alpha_2088_basic = ts_regression(target_data, group_mean(target_data, log(ts_mean(cap, 21)), densify(bucket(rank(cap), range='0.1, 1, 0.1'))), 756, rettype=2);\n        alpha = rank(alpha_2088_basic);\n        alpha",
+        "original_sharpe": 1.35,
+        "original_fitness": 0.9,
+        "params": {
+            "data_types": [
+                "implied_volatility_put"
+            ],
+            "vol_terms": [
+                "90",
+                "180"
+            ],
+            "return_type": "ts_mean(returns, 63)",
+            "type_weights": [
+                1.0
+            ],
+            "term_weights": [
+                0.7,
+                0.3
+            ],
+            "return_weight": 0.8,
+            "backfill_days": 63,
+            "winsorize_std": 2.5
+        },
+        "exp_hash": "4a09a229a8d30acbf65cac5ca759baad"
+    },
+    {
+        "alpha_id": "L57a0d2",
+        "transformed_exp": "target_data = winsorize(ts_zscore((0.7 * ts_backfill(implied_volatility_put_90, 63) + 0.3 * ts_backfill(implied_volatility_put_180, 63)) * (0.8 * ts_backfill(ts_mean(returns, 63), 63)), 63), std=4.0);\n        alpha_2088_basic = ts_regression(target_data, group_mean(target_data, log(ts_mean(cap, 21)), densify(bucket(rank(cap), range='0.1, 1, 0.1'))), 756, rettype=2);\n        alpha = rank(alpha_2088_basic);\n        alpha",
+        "original_sharpe": 1.35,
+        "original_fitness": 0.9,
+        "params": {
+            "data_types": [
+                "implied_volatility_put"
+            ],
+            "vol_terms": [
+                "90",
+                "180"
+            ],
+            "return_type": "ts_mean(returns, 63)",
+            "type_weights": [
+                1.0
+            ],
+            "term_weights": [
+                0.7,
+                0.3
+            ],
+            "return_weight": 0.8,
+            "backfill_days": 63,
+            "winsorize_std": 4.0
+        },
+        "exp_hash": "8d66eb4624c8526d8524aa9c9a183ecb"
+    },
+    {
+        "alpha_id": "L57a0d2",
+        "transformed_exp": "target_data = winsorize(ts_zscore((0.7 * ts_backfill(implied_volatility_put_90, 63) + 0.3 * ts_backfill(implied_volatility_put_180, 63)) * (0.5 * ts_backfill(ts_delta(returns, 20), 63)), 63), std=2.5);\n        alpha_2088_basic = ts_regression(target_data, group_mean(target_data, log(ts_mean(cap, 21)), densify(bucket(rank(cap), range='0.1, 1, 0.1'))), 756, rettype=2);\n        alpha = rank(alpha_2088_basic);\n        alpha",
+        "original_sharpe": 1.35,
+        "original_fitness": 0.9,
+        "params": {
+            "data_types": [
+                "implied_volatility_put"
+            ],
+            "vol_terms": [
+                "90",
+                "180"
+            ],
+            "return_type": "ts_delta(returns, 20)",
+            "type_weights": [
+                1.0
+            ],
+            "term_weights": [
+                0.7,
+                0.3
+            ],
+            "return_weight": 0.5,
+            "backfill_days": 63,
+            "winsorize_std": 2.5
+        },
+        "exp_hash": "10ee97d428548b0d7916653f6bcdc55b"
+    },
+    {
+        "alpha_id": "L57a0d2",
+        "transformed_exp": "target_data = winsorize(ts_zscore((0.7 * ts_backfill(implied_volatility_put_90, 63) + 0.3 * ts_backfill(implied_volatility_put_180, 63)) * (0.5 * ts_backfill(ts_delta(returns, 20), 63)), 63), std=4.0);\n        alpha_2088_basic = ts_regression(target_data, group_mean(target_data, log(ts_mean(cap, 21)), densify(bucket(rank(cap), range='0.1, 1, 0.1'))), 756, rettype=2);\n        alpha = rank(alpha_2088_basic);\n        alpha",
+        "original_sharpe": 1.35,
+        "original_fitness": 0.9,
+        "params": {
+            "data_types": [
+                "implied_volatility_put"
+            ],
+            "vol_terms": [
+                "90",
+                "180"
+            ],
+            "return_type": "ts_delta(returns, 20)",
+            "type_weights": [
+                1.0
+            ],
+            "term_weights": [
+                0.7,
+                0.3
+            ],
+            "return_weight": 0.5,
+            "backfill_days": 63,
+            "winsorize_std": 4.0
+        },
+        "exp_hash": "7482eebbb6973ec3d3fa74625060689a"
+    },
+    {
+        "alpha_id": "L57a0d2",
+        "transformed_exp": "target_data = winsorize(ts_zscore((0.7 * ts_backfill(implied_volatility_put_90, 63) + 0.3 * ts_backfill(implied_volatility_put_180, 63)) * (0.8 * ts_backfill(ts_delta(returns, 20), 63)), 63), std=2.5);\n        alpha_2088_basic = ts_regression(target_data, group_mean(target_data, log(ts_mean(cap, 21)), densify(bucket(rank(cap), range='0.1, 1, 0.1'))), 756, rettype=2);\n        alpha = rank(alpha_2088_basic);\n        alpha",
+        "original_sharpe": 1.35,
+        "original_fitness": 0.9,
+        "params": {
+            "data_types": [
+                "implied_volatility_put"
+            ],
+            "vol_terms": [
+                "90",
+                "180"
+            ],
+            "return_type": "ts_delta(returns, 20)",
+            "type_weights": [
+                1.0
+            ],
+            "term_weights": [
+                0.7,
+                0.3
+            ],
+            "return_weight": 0.8,
+            "backfill_days": 63,
+            "winsorize_std": 2.5
+        },
+        "exp_hash": "ee8168c574d679969c6b03ef62bbcff9"
+    },
+    {
+        "alpha_id": "L57a0d2",
+        "transformed_exp": "target_data = winsorize(ts_zscore((0.7 * ts_backfill(implied_volatility_put_90, 63) + 0.3 * ts_backfill(implied_volatility_put_180, 63)) * (0.8 * ts_backfill(ts_delta(returns, 20), 63)), 63), std=4.0);\n        alpha_2088_basic = ts_regression(target_data, group_mean(target_data, log(ts_mean(cap, 21)), densify(bucket(rank(cap), range='0.1, 1, 0.1'))), 756, rettype=2);\n        alpha = rank(alpha_2088_basic);\n        alpha",
+        "original_sharpe": 1.35,
+        "original_fitness": 0.9,
+        "params": {
+            "data_types": [
+                "implied_volatility_put"
+            ],
+            "vol_terms": [
+                "90",
+                "180"
+            ],
+            "return_type": "ts_delta(returns, 20)",
+            "type_weights": [
+                1.0
+            ],
+            "term_weights": [
+                0.7,
+                0.3
+            ],
+            "return_weight": 0.8,
+            "backfill_days": 63,
+            "winsorize_std": 4.0
+        },
+        "exp_hash": "964c5aa0114ce0baa255df6661e66310"
+    },
+    {
+        "alpha_id": "L57a0d2",
+        "transformed_exp": "target_data = winsorize(ts_zscore(0.7 * ts_backfill(implied_volatility_put_90, 63) + 0.3 * ts_backfill(implied_volatility_put_180, 63), 63), std=2.5);\n        alpha_2088_basic = ts_regression(target_data, group_mean(target_data, log(ts_mean(cap, 21)), densify(bucket(rank(cap), range='0.1, 1, 0.1'))), 756, rettype=2);\n        alpha = rank(alpha_2088_basic);\n        alpha",
+        "original_sharpe": 1.35,
+        "original_fitness": 0.9,
+        "params": {
+            "data_types": [
+                "implied_volatility_put"
+            ],
+            "vol_terms": [
+                "90",
+                "180"
+            ],
+            "return_type": null,
+            "type_weights": [
+                1.0
+            ],
+            "term_weights": [
+                0.7,
+                0.3
+            ],
+            "return_weight": 0.0,
+            "backfill_days": 63,
+            "winsorize_std": 2.5
+        },
+        "exp_hash": "e70f5a0129b6982ce60fcbd6a5ff3fef"
+    },
+    {
+        "alpha_id": "L57a0d2",
+        "transformed_exp": "target_data = winsorize(ts_zscore(0.7 * ts_backfill(implied_volatility_put_90, 63) + 0.3 * ts_backfill(implied_volatility_put_180, 63), 63), std=4.0);\n        alpha_2088_basic = ts_regression(target_data, group_mean(target_data, log(ts_mean(cap, 21)), densify(bucket(rank(cap), range='0.1, 1, 0.1'))), 756, rettype=2);\n        alpha = rank(alpha_2088_basic);\n        alpha",
+        "original_sharpe": 1.35,
+        "original_fitness": 0.9,
+        "params": {
+            "data_types": [
+                "implied_volatility_put"
+            ],
+            "vol_terms": [
+                "90",
+                "180"
+            ],
+            "return_type": null,
+            "type_weights": [
+                1.0
+            ],
+            "term_weights": [
+                0.7,
+                0.3
+            ],
+            "return_weight": 0.0,
+            "backfill_days": 63,
+            "winsorize_std": 4.0
+        },
+        "exp_hash": "9467f9207821aae93e2959b4cd2783a3"
+    }
+]
