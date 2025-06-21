@@ -508,6 +508,24 @@ def generate_alpha_list(target_list, market_list, sector_list, cap, days, templa
             residual = target_data - predicted_return;
             alpha_{count}_residual_trend = rank(ts_mean(residual, 21));
             alpha_{count}_residual_trend
+        """,
+        'fundamental_alpha':"""
+            fundamental_data = winsorize(ts_backfill({target}, 63), std=4.0);
+            my_group = {group1};
+            my_group2 = {group2};
+            volume_ratio = volume / ts_sum(volume, 252);
+            volume_factor = group_rank(ts_decay_linear(volume_ratio, 10), my_group);
+            fundamental_factor = group_rank(ts_rank(fundamental_data, 252), my_group);
+            price_momentum = group_rank(-ts_delta(close, 5), my_group);
+
+            alpha = rank(volume_factor * fundamental_factor * price_momentum);
+
+            trade_signal = trade_when(
+                volume > adv20,
+                group_neutralize(alpha, my_group2),
+                -1
+            );
+            trade_signal
         """
     }
 

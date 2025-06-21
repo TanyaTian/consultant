@@ -7,6 +7,112 @@ from typing import List, Tuple
 import re
 from fnmatch import fnmatch
 
+def filter_fields_by_keywords(data, keywords=["gro", "pe", "chg"], minuskey=["pe"]):
+    """
+    Filter rows from data where id or description contains any of the specified keywords.
+    Adds a '-' prefix to ids matched by keywords in minuskey. If minuskey is empty, no prefixes are added.
+    Returns a deduplicated list.
+    
+    Args:
+        data (list): List of dictionaries containing 'id' and 'description' keys.
+        keywords (list): List of keywords to search for in id and description (case-insensitive).
+        minuskey (list): List of keywords whose matches will have a '-' prefix in the output. Empty list means no prefixes.
+    
+    Returns:
+        list: Deduplicated list of ids, with '-' prefix for minuskey-matched ids (if minuskey is non-empty).
+    """
+    # Input validation
+    if not isinstance(data, list):
+        raise ValueError("Data must be a list of dictionaries")
+    if not isinstance(keywords, list) or not keywords:
+        raise ValueError("Keywords must be a non-empty list")
+    if not isinstance(minuskey, list):
+        raise ValueError("minuskey must be a list")
+    # Validate that minuskey is a subset of keywords (skip if minuskey is empty)
+    if minuskey:
+        invalid_minuskey = [k for k in minuskey if k not in keywords]
+        if invalid_minuskey:
+            raise ValueError(f"minuskey contains invalid keywords not in keywords: {invalid_minuskey}")
+    
+    # Initialize result set for deduplication
+    result = set()
+    minuskey_matched_ids = set()  # Track ids matched by minuskey keywords (if any)
+    
+    # Create regex patterns for each keyword (case-insensitive)
+    regex_patterns = {keyword: re.compile(re.escape(keyword), re.IGNORECASE) for keyword in keywords}
+    
+    # Filter fields where id or description contains any keyword
+    for item in data:
+        if not isinstance(item, dict) or "id" not in item or "description" not in item:
+            continue  # Skip invalid items
+        field_id = item["id"]
+        description = item["description"]
+        
+        # Check if any keyword matches id or description
+        keyword_matched = False
+        minuskey_matched = False
+        for keyword, regex in regex_patterns.items():
+            if regex.search(str(field_id)) or regex.search(str(description)):
+                keyword_matched = True
+                if minuskey and keyword in minuskey:
+                    minuskey_matched = True
+        
+        # Add to result if any keyword matched
+        if keyword_matched:
+            result.add(field_id)
+            if minuskey_matched:
+                minuskey_matched_ids.add(field_id)
+    
+    # Create final list with '-' prefix for minuskey-matched ids (if minuskey is non-empty)
+    return [f"-{field_id}" if field_id in minuskey_matched_ids else field_id for field_id in result]
+
+def filter_fields_by_suffix(data, suffixes=["_gro", "_pe", "_chg"]):
+    # Initialize result list
+    result = []
+    
+    # Create regex pattern for suffixes
+    pattern = "|".join(re.escape(suffix) + "$" for suffix in suffixes)
+    
+    # Filter fields matching any of the suffixes
+    for item in data:
+        field_id = item["id"]
+        if re.search(pattern, field_id):
+            result.append(field_id)
+    
+    return result
+
+def generate_field_expressions(data, suffix1="_gro", suffix2="_st_dev", operator="/"):
+    # Initialize result list
+    result = []
+    
+    # Escape suffixes for regex
+    suffix1_escaped = re.escape(suffix1)
+    suffix2_escaped = re.escape(suffix2)
+    
+    # Separate fields with suffix1 and suffix2
+    fields1 = [item for item in data if re.search(f"{suffix1_escaped}$", item["id"])]
+    fields2 = [item for item in data if re.search(f"{suffix2_escaped}$", item["id"])]
+    
+    # For each field1, find matching field2 with same prefix
+    for item1 in fields1:
+        field1_id = item1["id"]
+        # Extract prefix by removing suffix1
+        prefix = re.sub(f"{suffix1_escaped}$", "", field1_id)
+        
+        # Find corresponding field2
+        matching_field2 = next(
+            (item for item in fields2 if item["id"] == f"{prefix}{suffix2}"),
+            None
+        )
+        
+        if matching_field2:
+            field2_id = matching_field2["id"]
+            # Generate expression
+            expression = f"{field1_id} {operator} {field2_id}"
+            result.append(expression)
+    
+    return result
+
 def extract_target_data_fields(file_path):
     """
     从文件中每行代码字符串中提取 target_data 中的 data_field，返回去重并排序的列表。
@@ -70,11 +176,15 @@ def filter_expressions_by_list_b(expression_list, list_b):
     Returns:
         list: 过滤后的表达式列表
     """
+    common_list = ['0', '4', '6', '9766', '1', '2', '3', '5', '10', '20', '250', '01', '90', '7',
+                   '21', '50', '100', '252', '60', '40', '63', '365', 'ts_rank', 'ts_delay', 
+                   'vec_avg', 'abs', 'ts_mean', 'power',
+                   'ts_std_dev', 'ts_sum', 'ts_delta']
     # 将 list_b 转换为集合，便于快速查找
-    list_b_set = set(list_b)
+    list_b_set = set(list_b + common_list)
     
     # 正则表达式 1：匹配函数式表达式 function_name(arg1 ,arg2)
-    func_pattern = r'^(subtract|add|divide|ts_corr)\(([^,]+)\s*,\s*([^)]+)\)'
+    func_pattern = r'^(subtract|add|divide|ts_corr|multiply)\(([^,]+)\s*,\s*([^)]+)\)'
     
     # 正则表达式 2：匹配字段名称（字母、数字、下划线组成）
     field_pattern = r'[a-zA-Z0-9_]+'
@@ -120,6 +230,7 @@ def generate_pending_simulation_data(alpha_pool: List[Tuple[str, int]],
                                      neut: str,
                                      region: str,
                                      universe: str,
+                                     max_trade: str,
                                      mode: str = "append",
                                      output_filename: str = None) -> None:
     """
@@ -199,6 +310,7 @@ def generate_pending_simulation_data(alpha_pool: List[Tuple[str, int]],
                     'nanHandling': 'ON',  # NaN 处理
                     'language': 'FASTEXPR',  # 表达式语言
                     'visualization': False,  # 不启用可视化
+                    'maxTrade': max_trade
                 },
                 'regular': alpha  # alpha 表达式
             }
@@ -604,3 +716,128 @@ def get_alphas_from_csv(csv_file_path, min_sharpe, min_fitness):
                 continue
                 
     return output
+
+
+def filter_csv_by_keywords(csv_path, keywords):
+    """
+    过滤CSV文件，去除包含任何关键词的行，将结果保存为*_filter.csv文件。
+    
+    Args:
+        csv_path (str): 要过滤的CSV文件路径
+        keywords (list): 用于过滤的关键词列表
+        
+    Returns:
+        str: 生成的过滤后文件路径
+        
+    Raises:
+        FileNotFoundError: 如果输入文件不存在
+        ValueError: 如果关键词列表为空
+    """
+    if not keywords:
+        raise ValueError("关键词列表不能为空")
+    
+    # 生成输出文件名
+    dir_path, filename = os.path.split(csv_path)
+    base_name, ext = os.path.splitext(filename)
+    output_path = os.path.join(dir_path, f"{base_name}_filter{ext}")
+    
+    # 读取输入文件并过滤行
+    with open(csv_path, 'r', encoding='utf-8') as infile, \
+         open(output_path, 'w', encoding='utf-8', newline='') as outfile:
+        reader = csv.reader(infile)
+        writer = csv.writer(outfile)
+        
+        # 写入表头
+        header = next(reader)
+        writer.writerow(header)
+        
+        # 过滤数据行
+        for row in reader:
+            # 检查行中是否包含任何关键词
+            row_text = ','.join(row).lower()
+            if not any(keyword.lower() in row_text for keyword in keywords):
+                writer.writerow(row)
+    
+    return output_path
+
+def split_csv(csv_path, num_splits, output_dir=None):
+    """
+    将 CSV 文件拆分为多个文件，每个文件包含除表头外的平均行数，表头与原文件一致。
+
+    Args:
+        csv_path (str): 要拆分的 CSV 文件路径
+        num_splits (int): 要拆分的文件数量
+        output_dir (str, optional): 输出目录路径。如果未指定，则使用原文件所在目录。
+    """
+    import math
+    import os
+
+    # 设置输出目录
+    if output_dir is None:
+        output_dir = os.path.dirname(csv_path)
+    else:
+        os.makedirs(output_dir, exist_ok=True)
+
+    # 读取原 CSV 文件
+    with open(csv_path, 'r', encoding='utf-8') as file:
+        reader = csv.reader(file)
+        header = next(reader)  # 读取表头
+        rows = list(reader)  # 读取所有行
+
+    # 计算每个文件应包含的行数
+    rows_per_file = math.ceil(len(rows) / num_splits)
+
+    # 获取文件名和扩展名
+    base_name = os.path.basename(csv_path)
+    base_name, ext = os.path.splitext(base_name)
+
+    # 拆分文件
+    for i in range(num_splits):
+        # 计算当前文件的起始和结束行
+        start = i * rows_per_file
+        end = start + rows_per_file
+
+        # 生成新文件名
+        new_file = os.path.join(output_dir, f"{base_name}_part{i+1}{ext}")
+
+        # 写入新文件
+        with open(new_file, 'w', encoding='utf-8', newline='') as out_file:
+            writer = csv.writer(out_file)
+            writer.writerow(header)  # 写入表头
+            writer.writerows(rows[start:end])  # 写入行
+
+
+def extract_id_description(csv_path, output_dir=None):
+    """
+    从 CSV 文件中提取 id 和 description 列，生成新的 CSV 文件。
+
+    Args:
+        csv_path (str): 要处理的 CSV 文件路径
+        output_dir (str, optional): 输出目录路径。如果未指定，则使用原文件所在目录。
+    """
+    import os
+
+    # 设置输出目录
+    if output_dir is None:
+        output_dir = os.path.dirname(csv_path)
+    else:
+        os.makedirs(output_dir, exist_ok=True)
+
+    # 读取原 CSV 文件
+    with open(csv_path, 'r', encoding='utf-8') as file:
+        reader = csv.DictReader(file)
+        rows = list(reader)
+
+    # 获取文件名和扩展名
+    base_name = os.path.basename(csv_path)
+    base_name, ext = os.path.splitext(base_name)
+
+    # 生成新文件名
+    new_file = os.path.join(output_dir, f"{base_name}_id_description{ext}")
+
+    # 写入新文件
+    with open(new_file, 'w', encoding='utf-8', newline='') as out_file:
+        writer = csv.DictWriter(out_file, fieldnames=['id', 'description'])
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({'id': row['id'], 'description': row['description']})
