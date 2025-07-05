@@ -13,7 +13,7 @@ from dataclasses import dataclass
 # 定义配置类
 @dataclass
 class Config:
-    data_path: Path = Path("data")
+    data_path: Path = Path("data/pnl")
 
 cfg = Config()
 
@@ -48,24 +48,39 @@ def load_obj(name: str) -> object:
     with open(name + '.pickle', 'rb') as f:
         return pickle.load(f)
 
-def wait_get(url: str, sess: requests.Session, max_retries: int = 10) -> requests.Response:
+def wait_get(url: str, sess: requests.Session, max_retries: int = 10, max_wait: float = 300.0) -> requests.Response:
     """
     执行带有重试逻辑和限流处理的 GET 请求。
+
+    参数:
+        url (str): API 地址。
+        sess (requests.Session): 已认证的会话。
+        max_retries (int): 最大重试次数。
+        max_wait (float): 最大等待时间（秒）。
     """
+    start_time = time.time()
     retries = 0
     while retries < max_retries:
-        while True:
-            simulation_progress = sess.get(url)
+        if time.time() - start_time > max_wait:
+            raise TimeoutError(f"Request timed out: {url}")
+        
+        try:
+            simulation_progress = sess.get(url, timeout=30)
             retry_after = simulation_progress.headers.get("Retry-After", 0)
-            if retry_after == 0:
-                break
-            time.sleep(float(retry_after))
-        if simulation_progress.status_code < 400:
-            break
-        time.sleep(2 ** retries)
+            if retry_after:
+                time.sleep(float(retry_after))
+                continue
+            if simulation_progress.status_code < 400:
+                return simulation_progress
+        except requests.exceptions.RequestException as e:
+            print(f"Request to {url} failed: {e}")
+        
+        sleep_time = 2 ** retries
+        time.sleep(sleep_time)
         retries += 1
-    return simulation_progress
-
+    
+    print(f"Request to {url} failed after {max_retries} retries")
+    raise requests.exceptions.RequestException(f"Failed to fetch {url} after {max_retries} retries")
 def _get_alpha_pnl(alpha_id: str, sess: requests.Session) -> pd.DataFrame:
     """
     从 WorldQuant Brain API 获取特定 alpha 的盈亏（PnL）数据。

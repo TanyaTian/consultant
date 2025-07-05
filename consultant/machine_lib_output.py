@@ -637,13 +637,16 @@ def write_to_csv(data, filename):
 import csv
 import ast
 
-def get_alphas_from_csv(csv_file_path, min_sharpe, min_fitness):
+def get_alphas_from_csv(csv_file_path, min_sharpe, min_fitness, mode="track"):
     """
     Process CSV file to generate alpha records in the format:
     [alpha_id, exp, sharpe, turnover, fitness, margin, dateCreated, decay]
     
     Args:
         csv_file_path: Path to the CSV file containing alpha data
+        min_sharpe: Minimum sharpe ratio threshold
+        min_fitness: Minimum fitness threshold 
+        mode: Filter mode - 'submit' or 'track' (default: 'track')
     
     Returns:
         List of filtered alpha records
@@ -674,42 +677,74 @@ def get_alphas_from_csv(csv_file_path, min_sharpe, min_fitness):
                 margin = is_data.get('margin', 0)
                 longCount = is_data.get('longCount', 0)
                 shortCount = is_data.get('shortCount', 0)
+                checks = is_data.get('checks', [])
                 
                 dateCreated = row['dateCreated']
-                
+                has_failed_checks = any(check['result'] == 'FAIL' for check in checks)
                 # Apply filter
                 if (longCount + shortCount) > 100:
-                    if (sharpe >= min_sharpe and fitness >= min_fitness) or (sharpe <= min_sharpe * -1.0 and fitness <= min_fitness * -1.0):
-                    #if (sharpe >= min_sharpe and fitness >= min_fitness):
-                        if sharpe is not None and sharpe < 0:
-                            exp = f"-{exp}"
-                        # Create the record
-                        rec = [
-                            alpha_id,
-                            exp,
-                            sharpe,
-                            turnover,
-                            fitness,
-                            margin,
-                            dateCreated,
-                            decay
-                        ]
-                        
-                        # Add additional decay modifier based on turnover
-                        if turnover > 0.7:
-                            rec.append(decay * 4)
-                        elif turnover > 0.6:
-                            rec.append(decay * 3 + 3)
-                        elif turnover > 0.5:
-                            rec.append(decay * 3)
-                        elif turnover > 0.4:
-                            rec.append(decay * 2)
-                        elif turnover > 0.35:
-                            rec.append(decay + 4)
-                        elif turnover > 0.3:
-                            rec.append(decay + 2)
-                        
-                        output.append(rec)
+                    if mode == "submit":
+                        if (sharpe >= min_sharpe and fitness >= min_fitness) and not has_failed_checks:
+                            if sharpe is not None and sharpe < 0:
+                                exp = f"-{exp}"
+                            # Create the record
+                            rec = [
+                                alpha_id,
+                                exp,
+                                sharpe,
+                                turnover,
+                                fitness,
+                                margin,
+                                dateCreated,
+                                decay
+                            ]
+                            
+                            # Add additional decay modifier based on turnover
+                            if turnover > 0.7:
+                                rec.append(decay * 4)
+                            elif turnover > 0.6:
+                                rec.append(decay * 3 + 3)
+                            elif turnover > 0.5:
+                                rec.append(decay * 3)
+                            elif turnover > 0.4:
+                                rec.append(decay * 2)
+                            elif turnover > 0.35:
+                                rec.append(decay + 4)
+                            elif turnover > 0.3:
+                                rec.append(decay + 2)
+                            
+                            output.append(rec)
+                    else:  # track mode
+                        if (sharpe >= min_sharpe and fitness >= min_fitness) or (sharpe <= min_sharpe * -1.0 and fitness <= min_fitness * -1.0):
+                            if sharpe is not None and sharpe < 0:
+                                exp = f"-{exp}"
+                            # Create the record
+                            rec = [
+                                alpha_id,
+                                exp,
+                                sharpe,
+                                turnover,
+                                fitness,
+                                margin,
+                                dateCreated,
+                                decay
+                            ]
+                            
+                            # Add additional decay modifier based on turnover
+                            if turnover > 0.7:
+                                rec.append(decay * 4)
+                            elif turnover > 0.6:
+                                rec.append(decay * 3 + 3)
+                            elif turnover > 0.5:
+                                rec.append(decay * 3)
+                            elif turnover > 0.4:
+                                rec.append(decay * 2)
+                            elif turnover > 0.35:
+                                rec.append(decay + 4)
+                            elif turnover > 0.3:
+                                rec.append(decay + 2)
+                            
+                            output.append(rec)
                     
             except (ValueError, SyntaxError, KeyError) as e:
                 # Skip rows with parsing errors or missing required fields
@@ -841,3 +876,19 @@ def extract_id_description(csv_path, output_dir=None):
         writer.writeheader()
         for row in rows:
             writer.writerow({'id': row['id'], 'description': row['description']})
+
+
+def view_alphas_margin(gold_bag):
+    s = login()
+    sharp_list = []
+    for gold, pc in gold_bag:
+
+        triple = locate_alpha(s, gold)
+        info = [triple[0], triple[2], triple[3], triple[4], triple[5], triple[6], triple[1]]
+        info.append(pc)
+        sharp_list.append(info)
+
+    sharp_list.sort(reverse=True, key = lambda x : x[4]) # x[4] 是 margin 的位置
+    for i in sharp_list:
+        print(i)
+

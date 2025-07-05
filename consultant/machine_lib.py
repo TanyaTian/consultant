@@ -697,7 +697,7 @@ def group_factory(op, field, region):
     glb_groups = ["market","sector", "industry", "subindustry",
             cap_group, sector_cap_group, vol_group, liquidity_group]
     
-    country_group = ["countrey"]
+    country_group = ["country"]
 
     if region == "CHN":
         groups += chn_group_13 + chn_group_1 + chn_group_2  
