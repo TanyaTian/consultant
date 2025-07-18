@@ -179,7 +179,7 @@ def filter_expressions_by_list_b(expression_list, list_b):
     common_list = ['0', '4', '6', '9766', '1', '2', '3', '5', '10', '20', '250', '01', '90', '7',
                    '21', '50', '100', '252', '60', '40', '63', '365', 'ts_rank', 'ts_delay', 
                    'vec_avg', 'abs', 'ts_mean', 'power',
-                   'ts_std_dev', 'ts_sum', 'ts_delta']
+                   'ts_std_dev', 'ts_sum', 'ts_delta', 'signed_power', 'log']
     # 将 list_b 转换为集合，便于快速查找
     list_b_set = set(list_b + common_list)
     
@@ -637,19 +637,37 @@ def write_to_csv(data, filename):
 import csv
 import ast
 
-def get_alphas_from_csv(csv_file_path, min_sharpe, min_fitness, mode="track"):
+def get_alphas_from_csv(csv_file_path, min_sharpe, min_fitness, mode="track", region_filter=None, single_data_set_filter=None):
     """
     Process CSV file to generate alpha records in the format:
     [alpha_id, exp, sharpe, turnover, fitness, margin, dateCreated, decay]
     
     Args:
         csv_file_path: Path to the CSV file containing alpha data
-        min_sharpe: Minimum sharpe ratio threshold
-        min_fitness: Minimum fitness threshold 
+        min_sharpe: Minimum sharpe ratio threshold (e.g. 1.0)
+        min_fitness: Minimum fitness threshold (e.g. 0.5)
         mode: Filter mode - 'submit' or 'track' (default: 'track')
+        region_filter: Optional region filter (e.g. "USA"). If None, no region filtering.
+        single_data_set_filter: Optional boolean to filter Single Data Set Alphas. If None, no filtering.
     
     Returns:
         List of filtered alpha records
+
+    Examples:
+        # Basic usage - filter by sharpe and fitness only
+        results = get_alphas_from_csv("output/simulated_alphas.csv", 1.0, 0.5)
+        
+        # Filter for USA region only
+        results = get_alphas_from_csv("output/simulated_alphas.csv", 1.0, 0.5, 
+                                    region_filter="USA")
+                                    
+        # Filter for Single Data Set Alphas only
+        results = get_alphas_from_csv("output/simulated_alphas.csv", 1.0, 0.5,
+                                    single_data_set_filter=True)
+                                    
+        # Combined filter - USA region and Single Data Set Alphas
+        results = get_alphas_from_csv("output/simulated_alphas.csv", 1.0, 0.5,
+                                    region_filter="USA", single_data_set_filter=True)
     """
     output = []
     
@@ -667,8 +685,8 @@ def get_alphas_from_csv(csv_file_path, min_sharpe, min_fitness, mode="track"):
                 
                 # Parse the regular code (expression)
                 regular = ast.literal_eval(row['regular'])
-                exp = regular.get('code', '')
-                
+                exp = fix_newline_expression(regular.get('code', ''))
+        
                 # Parse the is dictionary
                 is_data = ast.literal_eval(row['is'])
                 sharpe = is_data.get('sharpe', 0)
@@ -681,12 +699,26 @@ def get_alphas_from_csv(csv_file_path, min_sharpe, min_fitness, mode="track"):
                 
                 dateCreated = row['dateCreated']
                 has_failed_checks = any(check['result'] == 'FAIL' for check in checks)
-                # Apply filter
+                # Apply region filter if specified
+                if region_filter is not None and settings.get('region') != region_filter:
+                    continue
+                    
+                # Apply single data set filter if specified
+                if single_data_set_filter is not None:
+                    classifications = ast.literal_eval(row.get('classifications', '[]'))
+                    is_single_data_set = any(
+                        classification.get('id') == 'DATA_USAGE:SINGLE_DATA_SET' 
+                        for classification in classifications
+                    )
+                    if single_data_set_filter != is_single_data_set:
+                        continue
+                
+                # Apply other filters
                 if (longCount + shortCount) > 100:
                     if mode == "submit":
                         if (sharpe >= min_sharpe and fitness >= min_fitness) and not has_failed_checks:
                             if sharpe is not None and sharpe < 0:
-                                exp = f"-{exp}"
+                                exp = negate_expression(exp)
                             # Create the record
                             rec = [
                                 alpha_id,
@@ -698,6 +730,12 @@ def get_alphas_from_csv(csv_file_path, min_sharpe, min_fitness, mode="track"):
                                 dateCreated,
                                 decay
                             ]
+                            
+                            # Extract pyramids info from checks if available
+                            pyramid_checks = [check for check in checks if check.get('name') == 'MATCHES_PYRAMID']
+                            if pyramid_checks and 'pyramids' in pyramid_checks[0]:
+                                pyramids = pyramid_checks[0]['pyramids']
+                                rec.insert(7, pyramids)  # Insert after dateCreated
                             
                             # Add additional decay modifier based on turnover
                             if turnover > 0.7:
@@ -717,7 +755,7 @@ def get_alphas_from_csv(csv_file_path, min_sharpe, min_fitness, mode="track"):
                     else:  # track mode
                         if (sharpe >= min_sharpe and fitness >= min_fitness) or (sharpe <= min_sharpe * -1.0 and fitness <= min_fitness * -1.0):
                             if sharpe is not None and sharpe < 0:
-                                exp = f"-{exp}"
+                                exp = negate_expression(exp)
                             # Create the record
                             rec = [
                                 alpha_id,
@@ -729,6 +767,12 @@ def get_alphas_from_csv(csv_file_path, min_sharpe, min_fitness, mode="track"):
                                 dateCreated,
                                 decay
                             ]
+                            
+                            # Extract pyramids info from checks if available
+                            pyramid_checks = [check for check in checks if check.get('name') == 'MATCHES_PYRAMID']
+                            if pyramid_checks and 'pyramids' in pyramid_checks[0]:
+                                pyramids = pyramid_checks[0]['pyramids']
+                                rec.insert(7, pyramids)  # Insert after dateCreated
                             
                             # Add additional decay modifier based on turnover
                             if turnover > 0.7:
@@ -892,3 +936,74 @@ def view_alphas_margin(gold_bag):
     for i in sharp_list:
         print(i)
 
+
+def parse_alpha_blocks(file_path,block_size=3):
+    """
+    Read a file containing alpha expression blocks and return them as a list.
+    Each block must contain exactly 3 lines in the format:
+    1. financial_data definition
+    2. group definition 
+    3. ts operation
+    
+    Args:
+        file_path (str): Path to the input text file
+        
+    Returns:
+        list: List of valid alpha blocks (each as a string with 3 lines)
+    """
+    with open(file_path, 'r') as f:
+        lines = [line.strip() for line in f if line.strip()]
+    
+    # Group lines into blocks of block_size
+    blocks = []
+    for i in range(0, len(lines), block_size):
+        block_lines = lines[i:i+block_size]
+        if len(block_lines) == block_size:
+            blocks.append('\n'.join(block_lines))
+        else:
+            print(f"Skipping incomplete block at line {i+1}")
+    
+    print(f"Found {len(blocks)} valid alpha blocks in {file_path}")
+    return blocks
+
+
+def fix_newline_expression(expression):
+    """
+    修复表达式中的";n"问题（应该是";\n"被错误转换）
+    
+    Args:
+        expression (str): 输入表达式字符串
+        
+    Returns:
+        str: 修复后的表达式（如果发现问题），否则返回原表达式
+    """
+    # 检查是否存在";n"问题
+    if ";n" in expression:
+        # 替换所有";n"为";\n"
+        fixed_expression = expression.replace(";n", ";\n")
+        return fixed_expression
+    return expression
+
+
+def negate_expression(expression):
+    """
+    为表达式添加负号
+    
+    Args:
+        expression (str): 输入表达式字符串
+        
+    Returns:
+        str: 处理后的表达式
+            如果是单行表达式，直接在前面加负号
+            如果是多行表达式，在最后一行前加负号
+    """
+    if "\n" not in expression:
+        # 单行表达式
+        return f"-{expression}"
+    else:
+        # 多行表达式
+        lines = expression.split("\n")
+        last_line = lines[-1].strip()
+        # 在最后一行前加负号
+        lines[-1] = f"-{last_line}"
+        return "\n".join(lines)
