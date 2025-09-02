@@ -16,7 +16,7 @@ import pickle
  
 basic_ops = ["reverse", "inverse", "rank", "zscore", "quantile", "normalize"]
  
-ts_ops = ["ts_rank", "ts_zscore", "ts_delta",  "ts_sum", "ts_delay", 
+ts_ops = ["ts_rank", "ts_zscore",  "ts_sum", "ts_delta", "ts_delay", 
           "ts_std_dev", "ts_mean",  "ts_arg_min", "ts_arg_max","ts_scale", "ts_quantile"]
  
 ops_set = basic_ops + ts_ops 
@@ -107,6 +107,7 @@ def process_datafields(df):
     datafields += df[df['type'] == "MATRIX"]["id"].tolist()
     datafields += get_vec_fields(df[df['type'] == "VECTOR"]["id"].tolist())
     return ["winsorize(ts_backfill(%s, 120), std=4)"%field for field in datafields]
+
 
 def ts_factory(op, field):
     output = []
@@ -316,6 +317,7 @@ def get_alphas(start_date, end_date, sharpe_th, fitness_th, region, alpha_num, u
                 alpha_list = response.json()["results"]
                 #print(response.json())
                 for j in range(len(alpha_list)):
+                    print(alpha_list[j])
                     alpha_id = alpha_list[j]["id"]
                     name = alpha_list[j]["name"]
                     dateCreated = alpha_list[j]["dateCreated"]
@@ -900,10 +902,10 @@ def trade_when_factory_for_multi_line(op, field, region):
     Returns:
         list: 包含生成的 trade_alpha 表达式的列表。
     """
-    # 提取 field 的结果变量（放在最前面）
+    # 提取 field 的结果变量（最后一行）
     field_lines = field.strip().split('\n')
-    field_result = field_lines[-2].split('=')[0].strip()  # 提取 "alpha"（倒数第二行的变量名）
-    field_body = '\n'.join(field_lines[:-1])  # 保留 field 的所有行（不包括最后一行 "alpha"）
+    field_result = field_lines[-1].strip()  # 最后一行，例如 "alpha_76_residual"
+    field_body = '\n'.join(field_lines[:-1])  # 除最后一行外的所有行
 
     output = []
 
@@ -1024,7 +1026,7 @@ def trade_when_factory_for_multi_line(op, field, region):
     for oe in open_events:
         for ee in exit_events:
             trade_alpha_op = f"{op}({oe}, {field_result}, {ee})"
-            trade_alpha = f"{field_body}\n            trade_alpha = {trade_alpha_op};\n            trade_alpha"
+            trade_alpha = f"{field_body}\n   {trade_alpha_op}"
             output.append(trade_alpha)
 
     return output

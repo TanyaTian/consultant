@@ -7,6 +7,11 @@ from typing import List, Tuple
 import re
 from fnmatch import fnmatch
 
+ts_ops_2 = ["ts_rank", "ts_zscore", "ts_sum", "ts_delay", "ts_av_diff", "ts_ir",
+            "ts_std_dev", "ts_mean",  "ts_arg_min", "ts_arg_max","ts_scale", "ts_quantile",
+            "ts_kurtosis", "ts_max_diff", "ts_product", "ts_returns"]
+
+
 def filter_fields_by_keywords(data, keywords=["gro", "pe", "chg"], minuskey=["pe"]):
     """
     Filter rows from data where id or description contains any of the specified keywords.
@@ -231,6 +236,7 @@ def generate_pending_simulation_data(alpha_pool: List[Tuple[str, int]],
                                      region: str,
                                      universe: str,
                                      max_trade: str,
+                                     visualization: bool = False,
                                      mode: str = "append",
                                      output_filename: str = None) -> None:
     """
@@ -291,8 +297,20 @@ def generate_pending_simulation_data(alpha_pool: List[Tuple[str, int]],
         if file_mode == 'w' or (file_mode == 'a' and os.path.getsize(output_file) == 0):
             writer.writeheader()
 
-        # 遍历 alpha_pool 中的每个 alpha 和 decay
-        for x, (alpha, decay) in enumerate(alpha_pool):
+        # 遍历 alpha_pool 中的每个项目
+        for x, item in enumerate(alpha_pool):
+            # 处理不同的输入结构
+            if isinstance(item, tuple) and len(item) >= 2:
+                # 标准格式: (alpha, decay)
+                alpha, decay = item[0], item[1]
+            elif isinstance(item, str):
+                # 只有 alpha 字符串，使用默认 decay
+                alpha = item
+                decay = 0  # 默认 decay 值
+            else:
+                print(f"跳过无效项目: {item}")
+                continue
+            
             # 构造 simulation_data，与 single_simulate 一致
             simulation_data = {
                 'type': 'REGULAR',  # 模拟类型为常规 alpha
@@ -309,7 +327,7 @@ def generate_pending_simulation_data(alpha_pool: List[Tuple[str, int]],
                     'unitHandling': 'VERIFY',  # 单位处理
                     'nanHandling': 'ON',  # NaN 处理
                     'language': 'FASTEXPR',  # 表达式语言
-                    'visualization': False,  # 不启用可视化
+                    'visualization': visualization,  # 不启用可视化
                     'maxTrade': max_trade
                 },
                 'regular': alpha  # alpha 表达式
@@ -379,6 +397,72 @@ def get_ids_from_csv_directory(directory_path, suffix_pattern="*.csv"):
     
     # 打印最终结果
     print("总计提取的 id 数量:", len(id_list))
+    return id_list
+
+def get_ids_from_csv_directory_with_coverage(directory_path, coverage_threshold, suffix_pattern="*.csv"):
+    """
+    从指定目录下符合后缀模式的 CSV 文件中提取 id 列，并过滤 coverage >= coverage_threshold 的记录，返回合并后的 id 列表。
+
+    Args:
+        directory_path (str): CSV 文件所在的目录路径
+        coverage_threshold (float): coverage 阈值，只保留 coverage 大于等于此值的记录
+        suffix_pattern (str, optional): 文件后缀模式，例如 '*_group.csv' 或 '*_matrix.csv'，默认为 '*.csv'
+
+    Returns:
+        list: 包含所有符合条件 CSV 文件中 id 的列表（满足 coverage 条件）
+    """
+    # 存储所有 id 的列表
+    id_list = []
+    
+    # 检查目录是否存在
+    if not os.path.isdir(directory_path):
+        print(f"目录 {directory_path} 不存在")
+        return id_list
+    
+    # 获取目录下所有文件
+    all_files = os.listdir(directory_path)
+    
+    # 过滤出符合后缀模式的 CSV 文件
+    csv_files = [f for f in all_files if fnmatch(f, suffix_pattern)]
+    
+    if not csv_files:
+        print(f"目录 {directory_path} 中没有符合模式 '{suffix_pattern}' 的 CSV 文件")
+        return id_list
+    
+    # 遍历匹配的 CSV 文件
+    for csv_file in csv_files:
+        csv_file_path = os.path.join(directory_path, csv_file)
+        try:
+            # 读取 CSV 文件
+            df = pd.read_csv(csv_file_path)
+            
+            # 确保 'id' 列存在
+            if 'id' not in df.columns:
+                print(f"文件 {csv_file_path} 中缺少 'id' 列，跳过")
+                continue
+
+            # 检查是否有 'coverage' 列
+            if 'coverage' not in df.columns:
+                print(f"文件 {csv_file_path} 中缺少 'coverage' 列，跳过")
+                continue
+
+            # 过滤 coverage >= coverage_threshold 的记录
+            df_filtered = df[df['coverage'] >= coverage_threshold]
+            
+            # 提取 id 列，添加到 id_list
+            file_ids = df_filtered['id'].tolist()
+            id_list.extend(file_ids)
+            print(f"从 {csv_file_path} 提取 {len(file_ids)} 个 id (coverage>={coverage_threshold}): {file_ids}")
+        
+        except FileNotFoundError:
+            print(f"文件 {csv_file_path} 不存在，跳过")
+        except pd.errors.EmptyDataError:
+            print(f"文件 {csv_file_path} 为空，跳过")
+        except Exception as e:
+            print(f"读取文件 {csv_file_path} 时发生错误: {e}，跳过")
+    
+    # 打印最终结果
+    print("总计提取的 id 数量 (满足coverage条件):", len(id_list))
     return id_list
 
 def filter_list_b_by_csv(csv_file_path, list_b):
@@ -686,6 +770,8 @@ def get_alphas_from_csv(csv_file_path, min_sharpe, min_fitness, mode="track", re
                 # Parse the regular code (expression)
                 regular = ast.literal_eval(row['regular'])
                 exp = fix_newline_expression(regular.get('code', ''))
+                operatorCount = regular.get('operatorCount', 0)
+                
         
                 # Parse the is dictionary
                 is_data = ast.literal_eval(row['is'])
@@ -711,6 +797,8 @@ def get_alphas_from_csv(csv_file_path, min_sharpe, min_fitness, mode="track", re
                         for classification in classifications
                     )
                     if single_data_set_filter != is_single_data_set:
+                        continue
+                    elif operatorCount > 8:
                         continue
                 
                 # Apply other filters
@@ -999,11 +1087,281 @@ def negate_expression(expression):
     """
     if "\n" not in expression:
         # 单行表达式
-        return f"-{expression}"
+        return f"-({expression})"
     else:
         # 多行表达式
         lines = expression.split("\n")
         last_line = lines[-1].strip()
         # 在最后一行前加负号
-        lines[-1] = f"-{last_line}"
+        lines[-1] = f"-({last_line})"
         return "\n".join(lines)
+
+
+def generate_atom_expressions(datafield: str, region: str, day: int = 10) -> list:
+    """
+    根据datafield、region和day生成表达式列表
+    
+    参数:
+        datafield (str): 数据字段名
+        region (str): 地区，必须是'USA', 'ASI', 'EUR', 'GLB'或'CHN'（大写）
+        day (int): 时间窗口d的值，默认为10
+        
+    返回:
+        list: 包含所有表达式变体的字符串列表
+    """
+    # 定义各地区的group集合
+    usa_atom_group = ["market", "sector", "industry", "subindustry", "exchange"]
+    
+    asi_atom_group = ["market", "sector", "industry", "subindustry", "exchange", "country",
+                     "group_cartesian_product(country, market)", 
+                     "group_cartesian_product(country, industry)", 
+                     "group_cartesian_product(country, subindustry)", 
+                     "group_cartesian_product(country, exchange)",
+                     "group_cartesian_product(country, sector)"]
+    
+    eur_atom_group = asi_atom_group.copy()
+    glb_atom_group = asi_atom_group.copy()
+    
+    chn_atom_group = ["market", "sector", "industry", "subindustry", "exchange"]
+    
+    # 根据region选择对应的group集合（直接匹配大写）
+    if region == 'USA':
+        groups = usa_atom_group
+    elif region == 'ASI':
+        groups = asi_atom_group
+    elif region == 'EUR':
+        groups = eur_atom_group
+    elif region == 'GLB':
+        groups = glb_atom_group
+    elif region == 'CHN':
+        groups = chn_atom_group
+    else:
+        raise ValueError(f"无效的region: {region}，必须是'USA', 'ASI', 'EUR', 'GLB'或'CHN'（大写）")
+    
+    expressions = []
+    
+    # 1. x (只有1个)
+    expressions.append(f"{datafield}")
+    
+    # 2-5. 涉及单个group的表达式 (每个group生成一个)
+    for group in groups:
+        # 2. x - group_mean(x, 1, group)
+        expressions.append(f"{datafield} - group_mean({datafield}, 1, densify({group}))")
+        
+        # 3. x / group_mean(x, 1, group)
+        expressions.append(f"{datafield} / group_mean({datafield}, 1, densify({group}))")
+        
+        # 4. ts_corr(x, group_mean(x, 1, group), day)
+        expressions.append(f"ts_corr({datafield}, group_mean({datafield}, 1, densify({group})), {day})")
+        
+        # 5. ts_regression(x, group_mean(x, 1, group), day, rettype = 0)
+        expressions.append(f"ts_regression({datafield}, group_mean({datafield}, 1, densify({group})), {day}, rettype = 0)")
+    
+    # 6-11. 涉及两个不同group的表达式 (遍历所有group1 != group2的组合)
+    for i in range(len(groups)):
+        for j in range(len(groups)):
+            if i != j:
+                group1, group2 = groups[i], groups[j]
+                
+                # 6. group_rank(x, group1) - group_rank(x, group2)
+                expressions.append(f"group_rank({datafield}, densify({group1})) - group_rank({datafield}, densify({group2}))")
+                
+                # 7. group_rank(x, group1) / group_rank(x, group2)
+                expressions.append(f"group_rank({datafield}, densify({group1})) / group_rank({datafield}, densify({group2}))")
+                
+                # 8. ts_corr(group_rank(x, group1), group_rank(x, group2), day)  op超长，暂时不使用
+                expressions.append(f"ts_corr(group_rank({datafield}, densify({group1})), group_rank({datafield}, densify({group2})), {day})")
+                
+                # 9. ts_regression(group_rank(x, group1), group_rank(x, group2), day, rettype = 0) op超长，暂时不使用
+                expressions.append(f"ts_regression(group_rank({datafield}, densify({group1})), group_rank({datafield}, densify({group2})), {day}, rettype = 0)")
+                
+                # 10. group_rank(x, group1) - group_rank(group_mean(x, 1, group1),  group2) op超长，暂时不使用
+                expressions.append(f"group_rank({datafield}, densify({group1})) - group_rank(group_mean({datafield}, 1, densify({group1})),  densify({group2}))")
+                
+                # 11. group_rank(x, group1) / group_rank(group_mean(x, 1, group1),  group2) op超长，暂时不使用
+                expressions.append(f"group_rank({datafield}, densify({group1})) / group_rank(group_mean({datafield}, 1, densify({group1})), densify({group2}))")
+    
+    return expressions
+
+def generate_std_expressions(datafield: str, region: str) -> list:
+    """
+    根据datafield、region和day生成表达式列表
+    
+    参数:
+        datafield (str): 数据字段名
+        region (str): 地区，必须是'USA', 'ASI', 'EUR', 'GLB'或'CHN'（大写）
+        day (int): 时间窗口d的值，默认为10
+        
+    返回:
+        list: 包含所有表达式变体的字符串列表
+    """
+    # 定义各地区的group集合
+    usa_atom_group = ["sector"]
+    
+    asi_atom_group = ["sector"]
+    
+    eur_atom_group = asi_atom_group.copy()
+    glb_atom_group = asi_atom_group.copy()
+    
+    chn_atom_group = ["sector"]
+    
+    # 根据region选择对应的group集合（直接匹配大写）
+    if region == 'USA':
+        groups = usa_atom_group
+    elif region == 'ASI':
+        groups = asi_atom_group
+    elif region == 'EUR':
+        groups = eur_atom_group
+    elif region == 'GLB':
+        groups = glb_atom_group
+    elif region == 'CHN':
+        groups = chn_atom_group
+    else:
+        raise ValueError(f"无效的region: {region}，必须是'USA', 'ASI', 'EUR', 'GLB'或'CHN'（大写）")
+    
+    expressions = []
+    
+    # 1. x (只有1个)
+    expressions.append(f"{datafield}")
+    
+    # 2-5. 涉及单个group的表达式 (每个group生成一个)
+    for group in groups:
+        # 1. group_zscore(x)
+        expressions.append(f"group_zscore({datafield}, densify({group}))")
+        
+        # 2. group_neutralize(x)
+        expressions.append(f"group_neutralize({datafield}, densify({group}))")
+        
+        # 4. rank(x)
+        expressions.append(f"rank({datafield})")
+
+        # 5. zscore(x)
+        expressions.append(f"zscore({datafield})")
+
+        # 4. group_rank(x)
+        expressions.append(f"group_rank({datafield}, densify({group}))")
+        
+    return expressions
+
+def generate_velocity_acceleration(datafields: List[str], days: List[int]) -> List[str]:
+    """
+    生成基于速度与加速度模板的alpha表达式列表
+    
+    参数:
+        datafields (List[str]): datafield列表
+        days (List[int]): day列表
+        
+    返回:
+        List[str]: 生成的alpha表达式列表
+    """
+    expressions = []
+    for x in datafields:
+        # 模板1: ts_delta(ts_delta(x, d), d)
+        expr1 = f"ts_delta(ts_delta({x}, {days[0]}), {days[1]})"
+        # 模板2: ts_delta(x, d)
+        expr2 = f"ts_delta({x}, {days[0]})"
+        expressions.append(expr1)
+        expressions.append(expr2)
+    return expressions
+
+def ts_factory_with_day(op, field, days = None):
+    output = []
+    #days = [3, 5, 10, 20, 60, 120, 240]
+    if days is None:
+        days = [5, 22, 66, 120, 240]
+    for day in days:
+        alpha = "%s(%s, %d)"%(op, field, day)
+        output.append(alpha)
+    
+    return output
+
+def first_order_factory_with_day(fields, ops_set, days = None):
+    alpha_set = []
+    #for field in fields:
+    for field in fields:
+        #reverse op does the work
+        #alpha_set.append(field)
+        #alpha_set.append("-%s"%field)
+        for op in ops_set:
+            if op == "ts_percentage":
+ 
+                alpha_set += ts_comp_factory(op, field, "percentage", [0.5])
+ 
+            elif op == "ts_decay_exp_window":
+ 
+                alpha_set += ts_comp_factory(op, field, "factor", [0.5])
+ 
+            elif op == "ts_moment":
+ 
+                alpha_set += ts_comp_factory(op, field, "k", [2, 3, 4])
+ 
+            elif op == "ts_entropy":
+ 
+                alpha_set += ts_comp_factory(op, field, "buckets", [10])
+ 
+            elif op.startswith("ts_") or op == "inst_tvr":
+ 
+                alpha_set += ts_factory_with_day(op, field, days)
+ 
+            elif op.startswith("vector"):
+ 
+                alpha_set += vector_factory(op, field)
+ 
+            elif op == "signed_power":
+ 
+                alpha = "%s(%s, 2)"%(op, field)
+                alpha_set.append(alpha)
+ 
+            else:
+                alpha = "%s(%s)"%(op, field)
+                alpha_set.append(alpha)
+ 
+    return alpha_set
+
+def sort_csv_by_description(input_path, output_path):
+    try:
+        # 存储有效行和对应的description（用于排序）
+        rows = []
+        descriptions = []
+        error_lines = []
+        
+        with open(input_path, 'r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            headers = next(reader)
+            
+            # 检查description列是否存在
+            if 'description' not in headers:
+                print(f"错误：文件 {input_path} 中不存在 'description' 列")
+                print(f"可用列名：{', '.join(headers)}")
+                return 1
+                
+            desc_index = headers.index('description')
+            
+            # 处理每一行
+            for i, row in enumerate(reader, start=2):  # 行号从2开始（标题行是第1行）
+                if len(row) != len(headers):
+                    error_lines.append(i)
+                    continue
+                # 提取description，并去除首尾的双引号
+                desc = row[desc_index].strip('"')
+                rows.append(row)
+                descriptions.append(desc)
+        
+        # 打印跳过行的警告
+        if error_lines:
+            print(f"警告：跳过 {len(error_lines)} 行格式错误（行号: {', '.join(map(str, error_lines))}）")
+        
+        # 根据descriptions对rows进行排序
+        sorted_rows = [row for _, row in sorted(zip(descriptions, rows), key=lambda x: x[0])]
+        
+        # 写入输出文件
+        with open(output_path, 'w', encoding='utf-8', newline='') as out_f:
+            writer = csv.writer(out_f)
+            writer.writerow(headers)
+            writer.writerows(sorted_rows)
+            
+        print(f"文件已排序并保存至: {output_path}")
+        return 0
+    except Exception as e:
+        print(f"处理过程中出错: {str(e)}")
+        return 1
